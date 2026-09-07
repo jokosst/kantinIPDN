@@ -82,55 +82,84 @@ class LaporanController extends Controller
         $item = $request->item ?? "";
         $stok = Item::all();
 
-        $stok_masuk = DB::table('beli_stok')
-            ->select(
-                'id_stok',
-                DB::raw('SUM(jumlah + 0) as stok_masuk'),
-                DB::raw('SUM((harga_beli + 0) * (jumlah + 0)) as total_masuk')
-            )
+        // 1. Stok Masuk Periode (beli_stok + stok_supplier)
+        $beli_stok_periode = DB::table('beli_stok')
+            ->select('id_stok', DB::raw('SUM(jumlah + 0) as total'))
             ->whereBetween('tanggal', [$tgl_awal, $tgl_akhir]);
-
-        if(!empty($item)) {
-            $stok_masuk->where('id_stok', $item);
+        if (!empty($item)) {
+            $beli_stok_periode->where('id_stok', $item);
         }
+        $beli_stok_periode = $beli_stok_periode->groupBy('id_stok')->pluck('total', 'id_stok');
 
-        $stok_masuk = $stok_masuk->groupBy('id_stok')->get()->keyBy('id_stok');
+        $stok_supplier_periode = DB::table('stok_supplier')
+            ->select('id_stok', DB::raw('SUM(jumlah + 0) as total'))
+            ->whereBetween('tanggal', [$tgl_awal, $tgl_akhir]);
+        if (!empty($item)) {
+            $stok_supplier_periode->where('id_stok', $item);
+        }
+        $stok_supplier_periode = $stok_supplier_periode->groupBy('id_stok')->pluck('total', 'id_stok');
 
-        $stok_keluar = DB::table('transaksi')
-            ->select(
-                'id_item',
-                DB::raw('SUM(jumlah + 0) as stok_keluar'),
-                DB::raw('SUM((harga + 0) * (jumlah + 0)) as total_keluar')
-            )
+        // 2. Stok Masuk Setelah tgl_akhir (beli_stok + stok_supplier)
+        $beli_stok_after = DB::table('beli_stok')
+            ->select('id_stok', DB::raw('SUM(jumlah + 0) as total'))
+            ->where('tanggal', '>', $tgl_akhir);
+        if (!empty($item)) {
+            $beli_stok_after->where('id_stok', $item);
+        }
+        $beli_stok_after = $beli_stok_after->groupBy('id_stok')->pluck('total', 'id_stok');
+
+        $stok_supplier_after = DB::table('stok_supplier')
+            ->select('id_stok', DB::raw('SUM(jumlah + 0) as total'))
+            ->where('tanggal', '>', $tgl_akhir);
+        if (!empty($item)) {
+            $stok_supplier_after->where('id_stok', $item);
+        }
+        $stok_supplier_after = $stok_supplier_after->groupBy('id_stok')->pluck('total', 'id_stok');
+
+        // 3. Stok Keluar Periode (transaksi closing)
+        $transaksi_periode = DB::table('transaksi')
+            ->select('id_item', DB::raw('SUM(jumlah + 0) as total'))
             ->where('closing', 1)
             ->whereBetween('tanggal', [$tgl_awal, $tgl_akhir]);
-
-        if(!empty($item)) {
-            $stok_keluar->where('id_item', $item);
+        if (!empty($item)) {
+            $transaksi_periode->where('id_item', $item);
         }
+        $transaksi_periode = $transaksi_periode->groupBy('id_item')->pluck('total', 'id_item');
 
-        $stok_keluar = $stok_keluar->groupBy('id_item')->get()->keyBy('id_item');
+        // 4. Stok Keluar Setelah tgl_akhir (transaksi closing)
+        $transaksi_after = DB::table('transaksi')
+            ->select('id_item', DB::raw('SUM(jumlah + 0) as total'))
+            ->where('closing', 1)
+            ->where('tanggal', '>', $tgl_akhir);
+        if (!empty($item)) {
+            $transaksi_after->where('id_item', $item);
+        }
+        $transaksi_after = $transaksi_after->groupBy('id_item')->pluck('total', 'id_item');
 
         $arus_stok = collect();
-        foreach($stok as $s) {
-            if(!empty($item) && $item != $s->id_item) {
+        foreach ($stok as $s) {
+            if (!empty($item) && $item != $s->id_item) {
                 continue;
             }
 
-            $masuk = $stok_masuk->get($s->id_item);
-            $keluar = $stok_keluar->get($s->id_item);
-            $jumlah_masuk = (int) ($masuk->stok_masuk ?? 0);
-            $jumlah_keluar = (int) ($keluar->stok_keluar ?? 0);
+            $masuk_periode = (int) (($beli_stok_periode[$s->id_item] ?? 0) + ($stok_supplier_periode[$s->id_item] ?? 0));
+            $masuk_after = (int) (($beli_stok_after[$s->id_item] ?? 0) + ($stok_supplier_after[$s->id_item] ?? 0));
+
+            $keluar_periode = (int) ($transaksi_periode[$s->id_item] ?? 0);
+            $keluar_after = (int) ($transaksi_after[$s->id_item] ?? 0);
+
+            $stok_saat_ini = (int) ($s->stok ?? 0);
+            $stok_akhir = $stok_saat_ini + $keluar_after - $masuk_after;
+            $stok_awal = $stok_akhir - $masuk_periode + $keluar_periode;
 
             $arus_stok->push((object)[
                 'id_item' => $s->id_item,
                 'kode' => $s->kode,
                 'nama' => $s->nama,
-                'stok_masuk' => $jumlah_masuk,
-                'stok_keluar' => $jumlah_keluar,
-                'selisih_stok' => $jumlah_masuk - $jumlah_keluar,
-                'total_masuk' => (float) ($masuk->total_masuk ?? 0),
-                'total_keluar' => (float) ($keluar->total_keluar ?? 0),
+                'stok_awal' => $stok_awal,
+                'stok_masuk' => $masuk_periode,
+                'stok_keluar' => $keluar_periode,
+                'stok_akhir' => $stok_akhir,
             ]);
         }
 
@@ -152,6 +181,32 @@ class LaporanController extends Controller
         $debet_transaksi = TStruk::where('closing', 1)->where('kode_closing', $kode)->where('bayar',1)->get();
         $nama_usaha = DB::table('nama_usaha')->where('id', 1)->first();
         return view('laporan.detail_closing', compact('closing', 'debet', 'debet_transaksi', 'nama_usaha'));
+    }
+    //daftar transaksi per closing
+    public function laporan_closing_transaksi($kode)
+    {
+        $closing = Closing::where('kode_closing', $kode)->first();
+        if (!$closing) {
+            return redirect()->back()->with('error', 'Data closing tidak ditemukan.');
+        }
+
+        $transaksi = DB::table('transaksi')
+            ->join('tabel_struk', 'transaksi.kode_struk', '=', 'tabel_struk.kode_struk')
+            ->leftJoin('item', 'transaksi.id_item', '=', 'item.id_item')
+            ->where('tabel_struk.kode_closing', $kode)
+            ->select(
+                'transaksi.*',
+                'item.harga_beli',
+                'tabel_struk.kode_closing',
+                'tabel_struk.metode_pembayaran',
+                'tabel_struk.bayar'
+            )
+            ->orderBy('transaksi.id_transaksi', 'asc')
+            ->get();
+
+        $non_tunai = DB::table('non_tunai')->get()->keyBy('id');
+
+        return view('laporan.transaksi_closing', compact('closing', 'transaksi', 'non_tunai'));
     }
     //laporan pendapatan
     public function laporan_pendapatan(Request $request)

@@ -86,7 +86,7 @@
                         <div class="row">
                             <div class="content table-responsive table-full-width">
                                 <div class="row" style="margin-bottom: 15px;">
-                                    <div class="col-md-12">
+                                    <div class="col-md-6 col-xs-12">
                                         <button onclick="exportToXLSX()" class="btn btn-success">
                                             <i class="fa fa-file-excel-o"></i> Export Excel
                                         </button>
@@ -94,41 +94,53 @@
                                             <i class="fa fa-file-pdf-o"></i> Export PDF
                                         </button>
                                     </div>
+                                    <div class="col-md-6 col-xs-12">
+                                        <div class="input-group pull-right" style="max-width: 320px; width: 100%;">
+                                            <input type="text" id="searchTable" class="form-control" placeholder="Cari kode atau nama barang...">
+                                            <span class="input-group-addon"><i class="fa fa-search"></i></span>
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <table class="table table-bordered table-striped">
+                                <table id="tabel_arus_stok" class="table table-bordered table-striped">
                                     <thead>
                                         <tr>
-                                            <th>Kode</th>
-                                            <th>Item</th>
-                                            <th>Stok Masuk</th>
-                                            <th>Stok Keluar</th>
-                                            <th>Selisih Stok</th>
-                                            <th>Total Nilai Masuk</th>
-                                            <th>Total Nilai Keluar</th>
+                                            <th style="width: 50px; text-align: center;">No</th>
+                                            <th>Kode Barang</th>
+                                            <th>Item / Nama Barang</th>
+                                            <th style="text-align: right;">Stok Awal</th>
+                                            <th style="text-align: right;">Stok Masuk</th>
+                                            <th style="text-align: right;">Stok Keluar</th>
+                                            <th style="text-align: right;">Saldo / Stok Akhir</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
-                                        @foreach($arus_stok as $p)
-                                        <tr>
-                                            <td>{{$p->kode}}</td>
-                                            <td>{{$p->nama}}</td>
-                                            <td>{{number_format($p->stok_masuk, 0, ',', '.')}}</td>
-                                            <td>{{number_format($p->stok_keluar, 0, ',', '.')}}</td>
-                                            <td>{{number_format($p->selisih_stok, 0, ',', '.')}}</td>
-                                            <td>Rp. {{number_format($p->total_masuk, 0, ',', '.')}}</td>
-                                            <td>Rp. {{number_format($p->total_keluar, 0, ',', '.')}}</td>
+                                    <tbody id="tabel_arus_stok_body">
+                                        @forelse($arus_stok as $index => $p)
+                                        <tr class="item-row" data-awal="{{ $p->stok_awal }}" data-masuk="{{ $p->stok_masuk }}" data-keluar="{{ $p->stok_keluar }}" data-akhir="{{ $p->stok_akhir }}">
+                                            <td style="text-align: center;" class="row-number">{{ $index + 1 }}</td>
+                                            <td class="col-kode">{{$p->kode}}</td>
+                                            <td class="col-nama">{{$p->nama}}</td>
+                                            <td style="text-align: right;">{{number_format($p->stok_awal, 0, ',', '.')}}</td>
+                                            <td style="text-align: right;">{{number_format($p->stok_masuk, 0, ',', '.')}}</td>
+                                            <td style="text-align: right;">{{number_format($p->stok_keluar, 0, ',', '.')}}</td>
+                                            <td style="text-align: right; font-weight: bold;">{{number_format($p->stok_akhir, 0, ',', '.')}}</td>
                                         </tr>
-                                        @endforeach
+                                        @empty
+                                        <tr id="empty_row">
+                                            <td colspan="7" class="text-center">Tidak ada data arus stok.</td>
+                                        </tr>
+                                        @endforelse
+                                        <tr id="no_match_row" style="display: none;">
+                                            <td colspan="7" class="text-center text-muted">Data item tidak ditemukan dengan pencarian tersebut.</td>
+                                        </tr>
                                     </tbody>
                                     <tfoot>
-                                        <tr>
-                                            <th colspan="2" style="text-align: right;">Total:</th>
-                                            <th>{{number_format($arus_stok->sum('stok_masuk'), 0, ',', '.')}}</th>
-                                            <th>{{number_format($arus_stok->sum('stok_keluar'), 0, ',', '.')}}</th>
-                                            <th>{{number_format($arus_stok->sum('selisih_stok'), 0, ',', '.')}}</th>
-                                            <th>Rp. {{number_format($arus_stok->sum('total_masuk'), 0, ',', '.')}}</th>
-                                            <th>Rp. {{number_format($arus_stok->sum('total_keluar'), 0, ',', '.')}}</th>
+                                        <tr style="font-weight: bold; background-color: #f9f9f9;">
+                                            <th colspan="3" style="text-align: right;">Total:</th>
+                                            <th id="total_awal" style="text-align: right;">{{number_format($arus_stok->sum('stok_awal'), 0, ',', '.')}}</th>
+                                            <th id="total_masuk" style="text-align: right;">{{number_format($arus_stok->sum('stok_masuk'), 0, ',', '.')}}</th>
+                                            <th id="total_keluar" style="text-align: right;">{{number_format($arus_stok->sum('stok_keluar'), 0, ',', '.')}}</th>
+                                            <th id="total_akhir" style="text-align: right;">{{number_format($arus_stok->sum('stok_akhir'), 0, ',', '.')}}</th>
                                         </tr>
                                     </tfoot>
                                 </table>
@@ -151,17 +163,72 @@ $(document).ready(function() {
     $('.select2').select2({
         width: '100%'
     });
+
+    function formatRibuan(val) {
+        return new Intl.NumberFormat('id-ID').format(val);
+    }
+
+    function updateTableTotals() {
+        let totalAwal = 0;
+        let totalMasuk = 0;
+        let totalKeluar = 0;
+        let totalAkhir = 0;
+        let visibleCount = 0;
+
+        $('.item-row:visible').each(function() {
+            visibleCount++;
+            $(this).find('.row-number').text(visibleCount);
+            totalAwal += parseFloat($(this).data('awal')) || 0;
+            totalMasuk += parseFloat($(this).data('masuk')) || 0;
+            totalKeluar += parseFloat($(this).data('keluar')) || 0;
+            totalAkhir += parseFloat($(this).data('akhir')) || 0;
+        });
+
+        if (visibleCount === 0 && $('.item-row').length > 0) {
+            $('#no_match_row').show();
+        } else {
+            $('#no_match_row').hide();
+        }
+
+        $('#total_awal').text(formatRibuan(totalAwal));
+        $('#total_masuk').text(formatRibuan(totalMasuk));
+        $('#total_keluar').text(formatRibuan(totalKeluar));
+        $('#total_akhir').text(formatRibuan(totalAkhir));
+    }
+
+    $('#searchTable').on('keyup input', function() {
+        const keyword = $(this).val().toLowerCase().trim();
+
+        $('.item-row').each(function() {
+            const kode = $(this).find('.col-kode').text().toLowerCase();
+            const nama = $(this).find('.col-nama').text().toLowerCase();
+
+            if (kode.indexOf(keyword) > -1 || nama.indexOf(keyword) > -1) {
+                $(this).show();
+            } else {
+                $(this).hide();
+            }
+        });
+
+        updateTableTotals();
+    });
 });
 
 function exportToXLSX() {
-    const table = document.querySelector('table');
-    const wb = XLSX.utils.table_to_book(table);
+    const table = document.getElementById('tabel_arus_stok');
+    const clone = table.cloneNode(true);
+    $(clone).find('tr:hidden, #no_match_row').remove();
+    const wb = XLSX.utils.table_to_book(clone);
     XLSX.writeFile(wb, 'arus_stok.xlsx');
 }
 
 function exportToPDF() {
-    const element = document.querySelector('table');
-    html2pdf().from(element).save('arus_stok.pdf');
+    const table = document.getElementById('tabel_arus_stok');
+    const clone = table.cloneNode(true);
+    $(clone).find('tr:hidden, #no_match_row').remove();
+    const wrapper = document.createElement('div');
+    wrapper.appendChild(clone);
+    html2pdf().from(wrapper).save('arus_stok.pdf');
 }
 </script>
 @endsection

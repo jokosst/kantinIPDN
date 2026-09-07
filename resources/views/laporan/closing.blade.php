@@ -102,9 +102,6 @@
                                     <th>Tunai</th>
                                     <th>Non Tunai</th>
                                     <th>Total<br>(Tunai + Non Tunai)</th>
-                                    <th>Pengeluaran</th>
-                                    <th>Total<br>(Tunai + Modal - Pengeluaran)</th>
-                                    <th>Uang Tutup</th>
                                     <th>Aksi</th>
                                 </tr>
                         </thead>
@@ -119,14 +116,23 @@
                                     <td>{{number_format($p->net_total)}}</td>
                                     <td>{{number_format($p->total_debet)}}</td>
                                     <td>{{number_format($p->net_total + $p->total_debet)}}</td>
-                                    <td>{{number_format($p->pengeluaran)}}</td>
-                                    <td>{{number_format($p->net_total + $p->modal - $p->pengeluaran)}}</td>
-                                    <td>{{number_format($p->uang_inputan)}}</td>
-                                    <td><a href="{{url('laporan/closing/detail/'.$p->kode_closing)}}" class="btn btn-info btn-sm">Detail</a></td>
-
+                                    <td>
+                                        <a href="{{url('laporan/closing/detail/'.$p->kode_closing)}}" class="btn btn-info btn-sm"><i class="fa fa-eye"></i> Detail</a>
+                                        <a href="{{url('laporan/closing/transaksi/'.$p->kode_closing)}}" class="btn btn-warning btn-sm"><i class="fa fa-list"></i> Cek Transaksi</a>
+                                    </td>
                                 </tr>
                             @endforeach
                         </tbody>
+                        <tfoot>
+                            <tr style="font-weight: bold; background-color: #f4f4f4;">
+                                <th colspan="4" style="text-align: right;">Total:</th>
+                                <th>{{ number_format($closing->sum('modal')) }}</th>
+                                <th>{{ number_format($closing->sum('net_total')) }}</th>
+                                <th>{{ number_format($closing->sum('total_debet')) }}</th>
+                                <th>{{ number_format($closing->sum('net_total') + $closing->sum('total_debet')) }}</th>
+                                <th></th>
+                            </tr>
+                        </tfoot>
                 </table>
                 </div>
                 </div>

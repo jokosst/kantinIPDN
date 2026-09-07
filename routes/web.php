@@ -157,6 +157,7 @@ Route::post('laporan/arus_stok', [LaporanController::class, 'laporan_arus_stok']
 Route::get('laporan/closing', [LaporanController::class, 'laporan_closing']);
 Route::post('laporan/closing', [LaporanController::class, 'laporan_closing']);
 Route::get('laporan/closing/detail/{kode}', [LaporanController::class, 'laporan_closing_detail']);
+Route::get('laporan/closing/transaksi/{kode}', [LaporanController::class, 'laporan_closing_transaksi']);
 Route::get('laporan/pembelian', [LaporanController::class, 'laporan_pembelian']);
 Route::post('laporan/pembelian', [LaporanController::class, 'laporan_pembelian']);
 Route::get('laporan/stok', [LaporanController::class, 'laporan_stok']);
